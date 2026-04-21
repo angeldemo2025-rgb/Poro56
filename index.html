@@ -3,17 +3,32 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Inventario PRO v8</title>
+<title>Inventario PRO v9</title>
 
 <style>
+:root{
+  --bg:#eaf4ff;
+  --card:#ffffff;
+  --text:#000;
+  --primary:#1e88e5;
+}
+
+body.dark{
+  --bg:#0f172a;
+  --card:#1e293b;
+  --text:#fff;
+  --primary:#3b82f6;
+}
+
 body{
   margin:0;
   font-family:system-ui;
-  background:#eaf4ff;
+  background:var(--bg);
+  color:var(--text);
 }
 
 header{
-  background:#1e88e5;
+  background:var(--primary);
   color:white;
   padding:15px;
   display:flex;
@@ -24,18 +39,17 @@ header{
 .container{ padding:10px; }
 
 .card{
-  background:white;
+  background:var(--card);
   padding:10px;
   margin:10px 0;
   border-radius:12px;
-  box-shadow:0 2px 8px rgba(0,0,0,0.1);
+  box-shadow:0 2px 8px rgba(0,0,0,0.15);
 }
 
 .row{
   display:flex;
   justify-content:space-between;
   align-items:center;
-  padding:6px 0;
 }
 
 .item{ flex:1; }
@@ -49,9 +63,8 @@ button{
   margin:3px;
 }
 
-.btn{ background:#1e88e5; color:white; }
-.btn-green{ background:#43a047; color:white; }
-.btn-danger{ background:#e53935; color:white; }
+.btn{ background:var(--primary); color:white; }
+.btn-green{ background:#22c55e; color:white; }
 
 .fab{
   position:fixed;
@@ -61,7 +74,7 @@ button{
   height:60px;
   border-radius:50%;
   font-size:30px;
-  background:#1e88e5;
+  background:var(--primary);
   color:white;
 }
 
@@ -85,13 +98,16 @@ input{
 
 <header>
   <button id="backBtn" onclick="back()" style="display:none;">⬅️</button>
-  <span>📦 Inventario PRO v8</span>
-  <button id="shareBtn" onclick="shareList()" style="display:none;">📤</button>
+  <span>📦 Inventario PRO v9</span>
+  <div>
+    <button onclick="toggleTheme()">🌗</button>
+    <button id="shareBtn" onclick="shareList()" style="display:none;">📤</button>
+  </div>
 </header>
 
 <div class="container">
 
-<!-- LOGIN SOLO CREATOR -->
+<!-- LOGIN -->
 <div id="login">
   <input id="email" placeholder="Email creador"/>
   <button class="btn" onclick="login()">Entrar como creador</button>
@@ -106,7 +122,7 @@ input{
 <!-- EDITOR -->
 <div id="editor" style="display:none;"></div>
 
-<!-- VIEW (PUBLICO) -->
+<!-- VIEW -->
 <div id="viewer" style="display:none;"></div>
 
 </div>
@@ -136,14 +152,39 @@ let currentList=null;
 let role="viewer";
 let currentListName="";
 
-/* UI */
+/* URL MODE */
+const params = new URLSearchParams(window.location.search);
+const modo = params.get("modo");
+const idFromUrl = params.get("id");
+
+/* AUTO VIEW MODE */
+if(modo==="view" && idFromUrl){
+  currentList = idFromUrl;
+  role="viewer";
+
+  document.getElementById("login").style.display="none";
+  document.getElementById("creator").style.display="none";
+
+  showButtons(false);
+  openViewer(idFromUrl);
+}
+
+/* THEME */
+window.toggleTheme=()=>{
+  document.body.classList.toggle("dark");
+}
+
+/* HEADER BUTTONS */
 function showButtons(show){
   document.getElementById("backBtn").style.display = show ? "block" : "none";
   document.getElementById("shareBtn").style.display = show ? "block" : "none";
 }
 
-/* LOGIN SOLO CREATOR */
+/* LOGIN CREATOR */
 window.login=()=>{
+
+  if(modo==="view") return;
+
   user=document.getElementById("email").value;
 
   if(user.includes("@")){
@@ -156,13 +197,12 @@ window.login=()=>{
 /* BACK */
 window.back=()=>{
   showButtons(false);
-
   document.getElementById("editor").style.display="none";
   document.getElementById("viewer").style.display="none";
   document.getElementById("creator").style.display="block";
 }
 
-/* CREAR LISTA */
+/* CREATE LIST */
 window.crearLista=()=>{
   let name=prompt("Nombre lista");
   if(!name) return;
@@ -176,7 +216,7 @@ window.crearLista=()=>{
   });
 }
 
-/* LISTAS */
+/* LOAD LISTS */
 function loadLists(){
   onValue(ref(db,"listas"),snap=>{
     let div=document.getElementById("listas");
@@ -192,7 +232,7 @@ function loadLists(){
   });
 }
 
-/* OPEN LIST (VIEW O EDITOR) */
+/* OPEN LIST */
 window.openList=(id)=>{
   currentList=id;
 
@@ -200,10 +240,9 @@ window.openList=(id)=>{
     let data=snap.val();
 
     currentListName = data.nombre;
-
     showButtons(true);
 
-    if(data.creador === user){
+    if(data.creador===user){
       role="creator";
       openCreator(id);
     }else{
@@ -213,7 +252,7 @@ window.openList=(id)=>{
   });
 }
 
-/* CREATOR */
+/* CREATOR VIEW */
 function openCreator(id){
 
   document.getElementById("creator").style.display="none";
@@ -221,10 +260,7 @@ function openCreator(id){
   document.getElementById("editor").style.display="block";
 
   onValue(ref(db,"listas/"+id+"/items"),snap=>{
-    let html=`
-      <div class="title">📦 ${currentListName}</div>
-      <h3>✏️ Editor</h3>
-    `;
+    let html=`<div class="title">📦 ${currentListName}</div><h3>✏️ Editor</h3>`;
 
     snap.forEach(i=>{
       html+=`
@@ -236,8 +272,6 @@ function openCreator(id){
 
         <input class="qty"
         type="number"
-        min="0"
-        max="99"
         value="${i.val().qty}"
         onchange="editQty('${id}','${i.key}',this.value)"/>
 
@@ -248,18 +282,17 @@ function openCreator(id){
   });
 }
 
-/* VIEW PUBLICO (SIN BOTONES) */
+/* VIEW MODE */
 function openViewer(id){
 
   document.getElementById("creator").style.display="none";
   document.getElementById("editor").style.display="none";
   document.getElementById("viewer").style.display="block";
 
+  showButtons(false);
+
   onValue(ref(db,"listas/"+id+"/items"),snap=>{
-    let html=`
-      <div class="title">📦 ${currentListName}</div>
-      <h3>📋 Lista</h3>
-    `;
+    let html=`<div class="title">📦 ${currentListName}</div><h3>📋 Lista</h3>`;
 
     snap.forEach(i=>{
       html+=`
@@ -281,23 +314,15 @@ window.editName=(l,i,v)=>{
 
 window.editQty=(l,i,v)=>{
   if(role!=="creator") return;
-
-  if(v>99) v=99;
-  if(v<0) v=0;
-
   update(ref(db,"listas/"+l+"/items/"+i),{qty:v});
 }
 
-/* QUICK ADD */
+/* ADD ITEM */
 window.addItemQuick=()=>{
   if(role!=="creator") return alert("Solo creador");
 
-  if(!currentList) return alert("Abre lista");
-
   let name=prompt("Artículo");
   let qty=prompt("Cantidad");
-
-  if(qty>99) qty=99;
 
   let id=push(ref(db,"listas/"+currentList+"/items")).key;
 
@@ -306,21 +331,12 @@ window.addItemQuick=()=>{
   });
 }
 
-/* SHARE LINK VIEW */
+/* SHARE VIEW LINK */
 window.shareList=()=>{
-  if(!currentList) return;
-
   let link = location.origin + "?modo=view&id=" + currentList;
 
-  if(navigator.share){
-    navigator.share({
-      title: currentListName,
-      url: link
-    });
-  }else{
-    navigator.clipboard.writeText(link);
-    alert("Link VIEW copiado 📋");
-  }
+  navigator.clipboard.writeText(link);
+  alert("Link VIEW copiado 📋");
 }
 
 </script>
