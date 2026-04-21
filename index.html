@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Inventario PRO v7</title>
+
+<style>
+body{
+  margin:0;
+  font-family:system-ui;
+  background:#eaf4ff;
+}
+
+header{
+  background:#1e88e5;
+  color:white;
+  padding:15px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+}
+
+.container{ padding:10px; }
+
+.card{
+  background:white;
+  padding:10px;
+  margin:10px 0;
+  border-radius:12px;
+  box-shadow:0 2px 8px rgba(0,0,0,0.1);
+}
+
+.row{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:6px 0;
+}
+
+.item{ flex:1; }
+.qty{ width:60px; text-align:right; }
+
+button{
+  padding:10px;
+  border:none;
+  border-radius:8px;
+  cursor:pointer;
+  margin:3px;
+}
+
+.btn{ background:#1e88e5; color:white; }
+.btn-green{ background:#43a047; color:white; }
+.btn-danger{ background:#e53935; color:white; }
+
+.fab{
+  position:fixed;
+  bottom:20px;
+  right:20px;
+  width:60px;
+  height:60px;
+  border-radius:50%;
+  font-size:30px;
+  background:#1e88e5;
+  color:white;
+}
+
+input{
+  padding:10px;
+  width:90%;
+  margin:5px 0;
+  border-radius:8px;
+  border:1px solid #ccc;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <button id="backBtn" onclick="back()" style="display:none;">⬅️</button>
+  <span>📦 Inventario PRO v7</span>
+  <button id="shareBtn" onclick="shareList()" style="display:none;">📤</button>
+</header>
+
+<div class="container">
+
+<div id="login">
+  <input id="email" placeholder="Email usuario"/>
+  <button class="btn" onclick="login()">Entrar</button>
+</div>
+
+<div id="creator" style="display:none;">
+  <button class="btn-green" onclick="crearLista()">+ Lista</button>
+  <div id="listas"></div>
+</div>
+
+<div id="editor" style="display:none;"></div>
+<div id="viewer" style="display:none;"></div>
+
+</div>
+
+<button class="fab" onclick="addItemQuick()">+</button>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getDatabase, ref, set, onValue, push, remove, update } 
+from "https://www.gstatic.com/firebasejs/10.7.1/firebase-database.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAzYkCG7aMTJxH2NH-_xJ7utAtOV4jjcfU",
+  authDomain: "checklist-bb0f7.firebaseapp.com",
+  databaseURL: "https://checklist-bb0f7-default-rtdb.firebaseio.com",
+  projectId: "checklist-bb0f7",
+  storageBucket: "checklist-bb0f7.firebasestorage.app",
+  messagingSenderId: "606230877523",
+  appId: "1:606230877523:web:4b147af89d07c76f21bda6"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
+
+let user="";
+let currentList=null;
+let role="viewer";
+
+/* UI buttons */
+function showHeaderButtons(show){
+  document.getElementById("backBtn").style.display = show ? "block" : "none";
+  document.getElementById("shareBtn").style.display = show ? "block" : "none";
+}
+
+/* LOGIN */
+window.login=()=>{
+  user=document.getElementById("email").value;
+
+  if(user.includes("@")){
+    document.getElementById("login").style.display="none";
+    document.getElementById("creator").style.display="block";
+    loadLists();
+  }
+}
+
+/* BACK */
+window.back=()=>{
+  showHeaderButtons(false);
+
+  document.getElementById("editor").style.display="none";
+  document.getElementById("viewer").style.display="none";
+  document.getElementById("creator").style.display="block";
+}
+
+/* CREATE LIST */
+window.crearLista=()=>{
+  let name=prompt("Nombre lista");
+  if(!name) return;
+
+  let id=push(ref(db,"listas")).key;
+
+  set(ref(db,"listas/"+id),{
+    nombre:name,
+    creador:user,
+    items:{}
+  });
+}
+
+/* LOAD LISTS */
+function loadLists(){
+  onValue(ref(db,"listas"),snap=>{
+    let div=document.getElementById("listas");
+    div.innerHTML="";
+
+    snap.forEach(l=>{
+      let d=l.val();
+
+      div.innerHTML+=`
+      <div class="card">
+        <b>${d.nombre}</b><br/>
+        <button class="btn" onclick="openList('${l.key}')">Abrir</button>
+      </div>`;
+    });
+  });
+}
+
+/* OPEN LIST */
+window.openList=(id)=>{
+  currentList=id;
+
+  onValue(ref(db,"listas/"+id),snap=>{
+    let data=snap.val();
+
+    showHeaderButtons(true);
+
+    if(data.creador===user){
+      role="creator";
+      openCreator(id);
+    }else{
+      role="viewer";
+      openViewer(id);
+    }
+  });
+}
+
+/* CREATOR VIEW */
+function openCreator(id){
+
+  document.getElementById("creator").style.display="none";
+  document.getElementById("viewer").style.display="none";
+  document.getElementById("editor").style.display="block";
+
+  onValue(ref(db,"listas/"+id+"/items"),snap=>{
+    let html="<h3>✏️ Editor</h3>";
+
+    snap.forEach(i=>{
+      html+=`
+      <div class="card row">
+
+        <input class="item"
+        value="${i.val().name}"
+        onchange="editName('${id}','${i.key}',this.value)"/>
+
+        <input class="qty"
+        type="number"
+        min="0"
+        max="99"
+        value="${i.val().qty}"
+        onchange="editQty('${id}','${i.key}',this.value)"/>
+
+      </div>`;
+    });
+
+    document.getElementById("editor").innerHTML=html;
+  });
+}
+
+/* VIEW ONLY (NO BUTTONS) */
+function openViewer(id){
+
+  document.getElementById("creator").style.display="none";
+  document.getElementById("editor").style.display="none";
+  document.getElementById("viewer").style.display="block";
+
+  onValue(ref(db,"listas/"+id+"/items"),snap=>{
+    let html="<h3>📋 Lista</h3>";
+
+    snap.forEach(i=>{
+      html+=`
+      <div class="card row">
+        <div class="item">${i.val().name}</div>
+        <div class="qty">${i.val().qty}</div>
+      </div>`;
+    });
+
+    document.getElementById("viewer").innerHTML=html;
+  });
+}
+
+/* EDIT ONLY FOR CREATOR */
+window.editName=(l,i,v)=>{
+  if(role!=="creator") return;
+  update(ref(db,"listas/"+l+"/items/"+i),{name:v});
+}
+
+window.editQty=(l,i,v)=>{
+  if(role!=="creator") return;
+
+  if(v>99) v=99;
+  if(v<0) v=0;
+
+  update(ref(db,"listas/"+l+"/items/"+i),{qty:v});
+}
+
+/* QUICK ADD */
+window.addItemQuick=()=>{
+  if(role!=="creator") return alert("Solo creador");
+
+  if(!currentList) return alert("Abre lista");
+
+  let name=prompt("Artículo");
+  let qty=prompt("Cantidad");
+
+  if(qty>99) qty=99;
+
+  let id=push(ref(db,"listas/"+currentList+"/items")).key;
+
+  set(ref(db,"listas/"+currentList+"/items/"+id),{
+    name, qty
+  });
+}
+
+/* SHARE ONLY WHEN INSIDE LIST */
+window.shareList=()=>{
+  if(!currentList) return;
+
+  let link=location.origin+"?modo=view&id="+currentList;
+
+  if(navigator.share){
+    navigator.share({title:"Lista inventario", url:link});
+  }else{
+    navigator.clipboard.writeText(link);
+    alert("Link VIEW copiado 📋");
+  }
+}
+
+/* DELETE LIST */
+window.del=(id)=>{
+  remove(ref(db,"listas/"+id));
+}
+
+</script>
+
+</body>
+</html>
