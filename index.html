@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Inventario PRO v9</title>
+<title>Inventario PRO v10</title>
 
 <style>
 :root{
   --bg:#eaf4ff;
-  --card:#ffffff;
+  --card:#fff;
   --text:#000;
   --primary:#1e88e5;
 }
@@ -44,6 +44,7 @@ header{
   margin:10px 0;
   border-radius:12px;
   box-shadow:0 2px 8px rgba(0,0,0,0.15);
+  position:relative;
 }
 
 .row{
@@ -78,6 +79,24 @@ button{
   color:white;
 }
 
+/* LONG PRESS MENU */
+.menu{
+  position:absolute;
+  top:5px;
+  right:5px;
+  display:none;
+  gap:5px;
+}
+
+.card.show-menu .menu{
+  display:flex;
+}
+
+.menu button{
+  padding:5px 8px;
+  font-size:14px;
+}
+
 input{
   padding:10px;
   width:90%;
@@ -98,7 +117,7 @@ input{
 
 <header>
   <button id="backBtn" onclick="back()" style="display:none;">⬅️</button>
-  <span>📦 Inventario PRO v9</span>
+  <span>📦 Inventario PRO v10</span>
   <div>
     <button onclick="toggleTheme()">🌗</button>
     <button id="shareBtn" onclick="shareList()" style="display:none;">📤</button>
@@ -107,27 +126,23 @@ input{
 
 <div class="container">
 
-<!-- LOGIN -->
 <div id="login">
   <input id="email" placeholder="Email creador"/>
-  <button class="btn" onclick="login()">Entrar como creador</button>
+  <button class="btn" onclick="login()">Entrar</button>
 </div>
 
-<!-- LISTAS -->
 <div id="creator" style="display:none;">
   <button class="btn-green" onclick="crearLista()">+ Lista</button>
   <div id="listas"></div>
 </div>
 
-<!-- EDITOR -->
 <div id="editor" style="display:none;"></div>
-
-<!-- VIEW -->
 <div id="viewer" style="display:none;"></div>
 
 </div>
 
-<button class="fab" onclick="addItemQuick()">+</button>
+<!-- FAB solo creator -->
+<button id="fab" class="fab" onclick="addItemQuick()">+</button>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
@@ -152,20 +167,19 @@ let currentList=null;
 let role="viewer";
 let currentListName="";
 
-/* URL MODE */
-const params = new URLSearchParams(window.location.search);
+/* URL VIEW */
+const params = new URLSearchParams(location.search);
 const modo = params.get("modo");
 const idFromUrl = params.get("id");
 
-/* AUTO VIEW MODE */
 if(modo==="view" && idFromUrl){
-  currentList = idFromUrl;
+  currentList=idFromUrl;
   role="viewer";
 
   document.getElementById("login").style.display="none";
   document.getElementById("creator").style.display="none";
+  document.getElementById("fab").style.display="none";
 
-  showButtons(false);
   openViewer(idFromUrl);
 }
 
@@ -174,32 +188,23 @@ window.toggleTheme=()=>{
   document.body.classList.toggle("dark");
 }
 
-/* HEADER BUTTONS */
-function showButtons(show){
-  document.getElementById("backBtn").style.display = show ? "block" : "none";
-  document.getElementById("shareBtn").style.display = show ? "block" : "none";
-}
-
-/* LOGIN CREATOR */
+/* LOGIN */
 window.login=()=>{
-
-  if(modo==="view") return;
-
   user=document.getElementById("email").value;
 
-  if(user.includes("@")){
-    document.getElementById("login").style.display="none";
-    document.getElementById("creator").style.display="block";
-    loadLists();
-  }
+  document.getElementById("login").style.display="none";
+  document.getElementById("creator").style.display="block";
+
+  loadLists();
 }
 
 /* BACK */
 window.back=()=>{
-  showButtons(false);
   document.getElementById("editor").style.display="none";
   document.getElementById("viewer").style.display="none";
   document.getElementById("creator").style.display="block";
+
+  document.getElementById("fab").style.display="block";
 }
 
 /* CREATE LIST */
@@ -223,13 +228,40 @@ function loadLists(){
     div.innerHTML="";
 
     snap.forEach(l=>{
-      div.innerHTML+=`
-      <div class="card">
+      let card=document.createElement("div");
+      card.className="card";
+
+      card.innerHTML=`
         <b>${l.val().nombre}</b><br/>
         <button class="btn" onclick="openList('${l.key}')">Abrir</button>
-      </div>`;
+      `;
+
+      /* LONG PRESS MENU */
+      let pressTimer;
+
+      card.addEventListener("touchstart",()=>{
+        pressTimer=setTimeout(()=>showMenu(card,l.key,l.val().nombre),600);
+      });
+
+      card.addEventListener("touchend",()=>clearTimeout(pressTimer));
+
+      div.appendChild(card);
     });
   });
+}
+
+/* MENU EDIT DELETE */
+function showMenu(card,id,name){
+  let action=confirm("🗑 OK borrar / Cancel = editar");
+
+  if(action){
+    remove(ref(db,"listas/"+id));
+  }else{
+    let newName=prompt("Nuevo nombre",name);
+    if(newName){
+      update(ref(db,"listas/"+id),{nombre:newName});
+    }
+  }
 }
 
 /* OPEN LIST */
@@ -238,9 +270,10 @@ window.openList=(id)=>{
 
   onValue(ref(db,"listas/"+id),snap=>{
     let data=snap.val();
+    currentListName=data.nombre;
 
-    currentListName = data.nombre;
-    showButtons(true);
+    document.getElementById("fab").style.display=
+      data.creador===user ? "block" : "none";
 
     if(data.creador===user){
       role="creator";
@@ -252,7 +285,7 @@ window.openList=(id)=>{
   });
 }
 
-/* CREATOR VIEW */
+/* CREATOR */
 function openCreator(id){
 
   document.getElementById("creator").style.display="none";
@@ -260,21 +293,17 @@ function openCreator(id){
   document.getElementById("editor").style.display="block";
 
   onValue(ref(db,"listas/"+id+"/items"),snap=>{
-    let html=`<div class="title">📦 ${currentListName}</div><h3>✏️ Editor</h3>`;
+    let html=`<div class="title">📦 ${currentListName}</div>`;
 
     snap.forEach(i=>{
       html+=`
       <div class="card row">
-
-        <input class="item"
-        value="${i.val().name}"
+        <input value="${i.val().name}"
         onchange="editName('${id}','${i.key}',this.value)"/>
 
         <input class="qty"
-        type="number"
         value="${i.val().qty}"
         onchange="editQty('${id}','${i.key}',this.value)"/>
-
       </div>`;
     });
 
@@ -282,17 +311,17 @@ function openCreator(id){
   });
 }
 
-/* VIEW MODE */
+/* VIEW */
 function openViewer(id){
 
   document.getElementById("creator").style.display="none";
   document.getElementById("editor").style.display="none";
   document.getElementById("viewer").style.display="block";
 
-  showButtons(false);
+  document.getElementById("fab").style.display="none";
 
   onValue(ref(db,"listas/"+id+"/items"),snap=>{
-    let html=`<div class="title">📦 ${currentListName}</div><h3>📋 Lista</h3>`;
+    let html=`<div class="title">📦 ${currentListName}</div>`;
 
     snap.forEach(i=>{
       html+=`
@@ -317,9 +346,9 @@ window.editQty=(l,i,v)=>{
   update(ref(db,"listas/"+l+"/items/"+i),{qty:v});
 }
 
-/* ADD ITEM */
+/* ADD */
 window.addItemQuick=()=>{
-  if(role!=="creator") return alert("Solo creador");
+  if(role!=="creator") return;
 
   let name=prompt("Artículo");
   let qty=prompt("Cantidad");
@@ -331,12 +360,19 @@ window.addItemQuick=()=>{
   });
 }
 
-/* SHARE VIEW LINK */
+/* SHARE (WHATSAPP + APPS) */
 window.shareList=()=>{
   let link = location.origin + "?modo=view&id=" + currentList;
 
-  navigator.clipboard.writeText(link);
-  alert("Link VIEW copiado 📋");
+  if(navigator.share){
+    navigator.share({
+      title: currentListName,
+      text: "Lista de inventario",
+      url: link
+    });
+  }else{
+    window.open("https://wa.me/?text="+encodeURIComponent(link));
+  }
 }
 
 </script>
