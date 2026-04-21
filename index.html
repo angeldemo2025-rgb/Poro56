@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Inventario PRO v7</title>
+<title>Inventario PRO v8</title>
 
 <style>
 body{
@@ -72,6 +72,12 @@ input{
   border-radius:8px;
   border:1px solid #ccc;
 }
+
+.title{
+  font-size:18px;
+  font-weight:bold;
+  margin:10px 0;
+}
 </style>
 </head>
 
@@ -79,23 +85,28 @@ input{
 
 <header>
   <button id="backBtn" onclick="back()" style="display:none;">⬅️</button>
-  <span>📦 Inventario PRO v7</span>
+  <span>📦 Inventario PRO v8</span>
   <button id="shareBtn" onclick="shareList()" style="display:none;">📤</button>
 </header>
 
 <div class="container">
 
+<!-- LOGIN SOLO CREATOR -->
 <div id="login">
-  <input id="email" placeholder="Email usuario"/>
-  <button class="btn" onclick="login()">Entrar</button>
+  <input id="email" placeholder="Email creador"/>
+  <button class="btn" onclick="login()">Entrar como creador</button>
 </div>
 
+<!-- LISTAS -->
 <div id="creator" style="display:none;">
   <button class="btn-green" onclick="crearLista()">+ Lista</button>
   <div id="listas"></div>
 </div>
 
+<!-- EDITOR -->
 <div id="editor" style="display:none;"></div>
+
+<!-- VIEW (PUBLICO) -->
 <div id="viewer" style="display:none;"></div>
 
 </div>
@@ -123,14 +134,15 @@ const db = getDatabase(app);
 let user="";
 let currentList=null;
 let role="viewer";
+let currentListName="";
 
-/* UI buttons */
-function showHeaderButtons(show){
+/* UI */
+function showButtons(show){
   document.getElementById("backBtn").style.display = show ? "block" : "none";
   document.getElementById("shareBtn").style.display = show ? "block" : "none";
 }
 
-/* LOGIN */
+/* LOGIN SOLO CREATOR */
 window.login=()=>{
   user=document.getElementById("email").value;
 
@@ -143,14 +155,14 @@ window.login=()=>{
 
 /* BACK */
 window.back=()=>{
-  showHeaderButtons(false);
+  showButtons(false);
 
   document.getElementById("editor").style.display="none";
   document.getElementById("viewer").style.display="none";
   document.getElementById("creator").style.display="block";
 }
 
-/* CREATE LIST */
+/* CREAR LISTA */
 window.crearLista=()=>{
   let name=prompt("Nombre lista");
   if(!name) return;
@@ -164,34 +176,34 @@ window.crearLista=()=>{
   });
 }
 
-/* LOAD LISTS */
+/* LISTAS */
 function loadLists(){
   onValue(ref(db,"listas"),snap=>{
     let div=document.getElementById("listas");
     div.innerHTML="";
 
     snap.forEach(l=>{
-      let d=l.val();
-
       div.innerHTML+=`
       <div class="card">
-        <b>${d.nombre}</b><br/>
+        <b>${l.val().nombre}</b><br/>
         <button class="btn" onclick="openList('${l.key}')">Abrir</button>
       </div>`;
     });
   });
 }
 
-/* OPEN LIST */
+/* OPEN LIST (VIEW O EDITOR) */
 window.openList=(id)=>{
   currentList=id;
 
   onValue(ref(db,"listas/"+id),snap=>{
     let data=snap.val();
 
-    showHeaderButtons(true);
+    currentListName = data.nombre;
 
-    if(data.creador===user){
+    showButtons(true);
+
+    if(data.creador === user){
       role="creator";
       openCreator(id);
     }else{
@@ -201,7 +213,7 @@ window.openList=(id)=>{
   });
 }
 
-/* CREATOR VIEW */
+/* CREATOR */
 function openCreator(id){
 
   document.getElementById("creator").style.display="none";
@@ -209,7 +221,10 @@ function openCreator(id){
   document.getElementById("editor").style.display="block";
 
   onValue(ref(db,"listas/"+id+"/items"),snap=>{
-    let html="<h3>✏️ Editor</h3>";
+    let html=`
+      <div class="title">📦 ${currentListName}</div>
+      <h3>✏️ Editor</h3>
+    `;
 
     snap.forEach(i=>{
       html+=`
@@ -233,7 +248,7 @@ function openCreator(id){
   });
 }
 
-/* VIEW ONLY (NO BUTTONS) */
+/* VIEW PUBLICO (SIN BOTONES) */
 function openViewer(id){
 
   document.getElementById("creator").style.display="none";
@@ -241,7 +256,10 @@ function openViewer(id){
   document.getElementById("viewer").style.display="block";
 
   onValue(ref(db,"listas/"+id+"/items"),snap=>{
-    let html="<h3>📋 Lista</h3>";
+    let html=`
+      <div class="title">📦 ${currentListName}</div>
+      <h3>📋 Lista</h3>
+    `;
 
     snap.forEach(i=>{
       html+=`
@@ -255,7 +273,7 @@ function openViewer(id){
   });
 }
 
-/* EDIT ONLY FOR CREATOR */
+/* EDIT */
 window.editName=(l,i,v)=>{
   if(role!=="creator") return;
   update(ref(db,"listas/"+l+"/items/"+i),{name:v});
@@ -288,23 +306,21 @@ window.addItemQuick=()=>{
   });
 }
 
-/* SHARE ONLY WHEN INSIDE LIST */
+/* SHARE LINK VIEW */
 window.shareList=()=>{
   if(!currentList) return;
 
-  let link=location.origin+"?modo=view&id="+currentList;
+  let link = location.origin + "?modo=view&id=" + currentList;
 
   if(navigator.share){
-    navigator.share({title:"Lista inventario", url:link});
+    navigator.share({
+      title: currentListName,
+      url: link
+    });
   }else{
     navigator.clipboard.writeText(link);
     alert("Link VIEW copiado 📋");
   }
-}
-
-/* DELETE LIST */
-window.del=(id)=>{
-  remove(ref(db,"listas/"+id));
 }
 
 </script>
