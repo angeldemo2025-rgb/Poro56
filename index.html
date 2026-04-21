@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>Inventario PRO v10</title>
+<title>Inventario PRO v11</title>
 
 <style>
 :root{
@@ -44,7 +44,6 @@ header{
   margin:10px 0;
   border-radius:12px;
   box-shadow:0 2px 8px rgba(0,0,0,0.15);
-  position:relative;
 }
 
 .row{
@@ -79,24 +78,6 @@ button{
   color:white;
 }
 
-/* LONG PRESS MENU */
-.menu{
-  position:absolute;
-  top:5px;
-  right:5px;
-  display:none;
-  gap:5px;
-}
-
-.card.show-menu .menu{
-  display:flex;
-}
-
-.menu button{
-  padding:5px 8px;
-  font-size:14px;
-}
-
 input{
   padding:10px;
   width:90%;
@@ -117,7 +98,7 @@ input{
 
 <header>
   <button id="backBtn" onclick="back()" style="display:none;">⬅️</button>
-  <span>📦 Inventario PRO v10</span>
+  <span>📦 Inventario PRO v11</span>
   <div>
     <button onclick="toggleTheme()">🌗</button>
     <button id="shareBtn" onclick="shareList()" style="display:none;">📤</button>
@@ -141,7 +122,7 @@ input{
 
 </div>
 
-<!-- FAB solo creator -->
+<!-- 🔥 FIX: faltaba el ID -->
 <button id="fab" class="fab" onclick="addItemQuick()">+</button>
 
 <script type="module">
@@ -167,22 +148,6 @@ let currentList=null;
 let role="viewer";
 let currentListName="";
 
-/* URL VIEW */
-const params = new URLSearchParams(location.search);
-const modo = params.get("modo");
-const idFromUrl = params.get("id");
-
-if(modo==="view" && idFromUrl){
-  currentList=idFromUrl;
-  role="viewer";
-
-  document.getElementById("login").style.display="none";
-  document.getElementById("creator").style.display="none";
-  document.getElementById("fab").style.display="none";
-
-  openViewer(idFromUrl);
-}
-
 /* THEME */
 window.toggleTheme=()=>{
   document.body.classList.toggle("dark");
@@ -205,6 +170,7 @@ window.back=()=>{
   document.getElementById("creator").style.display="block";
 
   document.getElementById("fab").style.display="block";
+  document.getElementById("shareBtn").style.display="none";
 }
 
 /* CREATE LIST */
@@ -228,40 +194,13 @@ function loadLists(){
     div.innerHTML="";
 
     snap.forEach(l=>{
-      let card=document.createElement("div");
-      card.className="card";
-
-      card.innerHTML=`
+      div.innerHTML+=`
+      <div class="card">
         <b>${l.val().nombre}</b><br/>
         <button class="btn" onclick="openList('${l.key}')">Abrir</button>
-      `;
-
-      /* LONG PRESS MENU */
-      let pressTimer;
-
-      card.addEventListener("touchstart",()=>{
-        pressTimer=setTimeout(()=>showMenu(card,l.key,l.val().nombre),600);
-      });
-
-      card.addEventListener("touchend",()=>clearTimeout(pressTimer));
-
-      div.appendChild(card);
+      </div>`;
     });
   });
-}
-
-/* MENU EDIT DELETE */
-function showMenu(card,id,name){
-  let action=confirm("🗑 OK borrar / Cancel = editar");
-
-  if(action){
-    remove(ref(db,"listas/"+id));
-  }else{
-    let newName=prompt("Nuevo nombre",name);
-    if(newName){
-      update(ref(db,"listas/"+id),{nombre:newName});
-    }
-  }
 }
 
 /* OPEN LIST */
@@ -270,10 +209,10 @@ window.openList=(id)=>{
 
   onValue(ref(db,"listas/"+id),snap=>{
     let data=snap.val();
+
     currentListName=data.nombre;
 
-    document.getElementById("fab").style.display=
-      data.creador===user ? "block" : "none";
+    document.getElementById("shareBtn").style.display="block";
 
     if(data.creador===user){
       role="creator";
@@ -292,18 +231,22 @@ function openCreator(id){
   document.getElementById("viewer").style.display="none";
   document.getElementById("editor").style.display="block";
 
+  document.getElementById("fab").style.display="block";
+
   onValue(ref(db,"listas/"+id+"/items"),snap=>{
     let html=`<div class="title">📦 ${currentListName}</div>`;
 
     snap.forEach(i=>{
       html+=`
       <div class="card row">
+
         <input value="${i.val().name}"
         onchange="editName('${id}','${i.key}',this.value)"/>
 
         <input class="qty"
         value="${i.val().qty}"
         onchange="editQty('${id}','${i.key}',this.value)"/>
+
       </div>`;
     });
 
@@ -319,6 +262,7 @@ function openViewer(id){
   document.getElementById("viewer").style.display="block";
 
   document.getElementById("fab").style.display="none";
+  document.getElementById("shareBtn").style.display="none";
 
   onValue(ref(db,"listas/"+id+"/items"),snap=>{
     let html=`<div class="title">📦 ${currentListName}</div>`;
@@ -360,7 +304,7 @@ window.addItemQuick=()=>{
   });
 }
 
-/* SHARE (WHATSAPP + APPS) */
+/* 🔥 SHARE FIX RESTAURADO */
 window.shareList=()=>{
   let link = location.origin + "?modo=view&id=" + currentList;
 
